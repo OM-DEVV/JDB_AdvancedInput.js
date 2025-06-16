@@ -1,66 +1,36 @@
 /*:
  * @pluginname JDB_AdvancedInput
- * @author A Proficient Java Dev
+ * @author AI & OM-Devv
  * @target MZ
- * @version 5.0.3
- * @url https://your-website.com
+ * @version 5.3.0
+ * @url 
  *
  * @help
  * JDB_AdvancedInput.js
- * Version 5.0.3
+ * Version 5.3.0
  *
  * This plugin provides a robust system for binding keyboard keys and mouse
- * buttons to various in-game actions. It correctly intercepts and consumes
- * input to prevent conflicts with default game controls.
+ * buttons to various in-game actions.
+ *
+ * --- WHAT'S NEW (v5.3.0) ---
+ * Added a new Action Type: "Toggle Auto-Move Forward".
+ * This is a complete overhaul of the previous "Move Forward" feature.
+ *
+ * How "Toggle Auto-Move Forward" Works:
+ * - Bind a key to this action (use the "Triggered" condition).
+ * - Pressing the key once will cause the player to walk forward continuously
+ *   and smoothly.
+ * - Pressing the key again will stop the auto-movement.
+ * - Pressing ANY other movement key (Up, Down, Left, Right) or clicking to
+ *   move on the map will instantly cancel the auto-move and give you back
+ *   manual control. This provides a seamless and intuitive experience.
  *
  * --- SETUP ---
- * 1. Configure your default bindings in the "Initial Key Binds" and
+ * 1. To use the new auto-move, create a keybind and select
+ *    "Toggle Auto-Move Forward" as the Action Type.
+ * 2. Configure other bindings in the "Initial Key Binds" and
  *    "Initial Mouse Binds" parameter lists.
- * 2. Use Plugin Commands to modify bindings during the game.
- *    These changes are stored in the save file.
- *
- * --- PLUGIN COMMANDS ---
- * Use these in your events to dynamically change controls.
- *
- * [Assign Key] / [Remove Key]
- *   Assigns or removes an action for a keyboard key.
- *
- * [Assign Mouse] / [Remove Mouse]
- *   Assigns or removes an action for a mouse button.
- *
- * --- SCRIPT CALLS / API FOR DEVS ---
- * This plugin exposes a global API for other plugins or advanced script
- * calls to use. Access it via: JDB_AdvancedInput.API
- *
- * All API functions immediately apply the changes.
- *
- * --- API EXAMPLES ---
- *
- * 1. Assigning the 'H' key to call Common Event 15:
- *
- *   const key = 'h';
- *   const action = {
- *       trigger: 'isTriggered',
- *       type: 'commonEvent',
- *       commonEventId: 15,
- *       isParallel: false
- *   };
- *   JDB_AdvancedInput.API.assignKey(key, action);
- *
- * 2. Assigning the Right Mouse Button to a script call:
- *
- *   const action = {
- *       trigger: 'isTriggered', // Mouse only uses isTriggered effectively
- *       type: 'scriptCall',
- *       scriptCall: "$gameSwitches.setValue(20, !$gameSwitches.value(20));"
- *   };
- *   JDB_AdvancedInput.API.assignMouse('right', action);
- *
- * 3. Removing a key binding:
- *
- *   // Removes the custom bind from the 'H' key.
- *   // The second argument `restoreDefault` is optional (defaults to true).
- *   JDB_AdvancedInput.API.removeKey('h', true);
+ * 3. Use Plugin Commands to modify bindings during the game.
  *
  *
  * @param overwriteDefault
@@ -168,6 +138,7 @@
 /*~struct~Action:
  * @param triggerCondition
  * @text Trigger Condition
+ * @desc The trigger condition for the action. For "Toggle Auto-Move", use "Triggered".
  * @type select
  * @option Triggered (on press) @value isTriggered
  * @option Pressed (on hold) @value isPressed
@@ -180,6 +151,7 @@
  * @option Common Event @value commonEvent
  * @option Map Event @value mapEvent
  * @option Script Call @value scriptCall
+ * @option Toggle Auto-Move Forward @value toggleMoveForward
  *
  * @param commonEventId
  * @text Common Event ID
@@ -285,54 +257,19 @@ var JDB_AdvancedInput = window.JDB_AdvancedInput || {};
             }
         }
 
-        static assignKey(keyName, actionObject, overwrite) {
-            keyName = keyName.toLowerCase();
-            const keyCode = KeyCodes.keyboard[keyName];
-            if (!keyCode) { console.warn(`${pluginName}: Unknown key "${keyName}".`); return; }
-            if ($jdbInputData.keyBinds[keyName] && !overwrite) return;
-            if (_originalKeyMapper[keyCode] && !overwrite) return;
-            $jdbInputData.keyBinds[keyName] = actionObject;
-            Input.keyMapper[keyCode] = keyName;
-        }
-
-        static removeKey(keyName, restoreDefault) {
-            keyName = keyName.toLowerCase();
-            delete $jdbInputData.keyBinds[keyName];
-            const keyCode = KeyCodes.keyboard[keyName];
-            if (keyCode) {
-                if (restoreDefault && _originalKeyMapper[keyCode]) Input.keyMapper[keyCode] = _originalKeyMapper[keyCode];
-                else delete Input.keyMapper[keyCode];
-            }
-        }
-
-        static assignMouse(button, actionObject, overwrite) {
-            if ($jdbInputData.mouseBinds[button] && !overwrite) return;
-            $jdbInputData.mouseBinds[button] = actionObject;
-        }
-
+        static assignKey(keyName, actionObject, overwrite) { keyName = keyName.toLowerCase(); const keyCode = KeyCodes.keyboard[keyName]; if (!keyCode) { console.warn(`${pluginName}: Unknown key "${keyName}".`); return; } if ($jdbInputData.keyBinds[keyName] && !overwrite) return; if (_originalKeyMapper[keyCode] && !overwrite) return; $jdbInputData.keyBinds[keyName] = actionObject; Input.keyMapper[keyCode] = keyName; }
+        static removeKey(keyName, restoreDefault) { keyName = keyName.toLowerCase(); delete $jdbInputData.keyBinds[keyName]; const keyCode = KeyCodes.keyboard[keyName]; if (keyCode) { if (restoreDefault && _originalKeyMapper[keyCode]) Input.keyMapper[keyCode] = _originalKeyMapper[keyCode]; else delete Input.keyMapper[keyCode]; } }
+        static assignMouse(button, actionObject, overwrite) { if ($jdbInputData.mouseBinds[button] && !overwrite) return; $jdbInputData.mouseBinds[button] = actionObject; }
         static removeMouse(button) { delete $jdbInputData.mouseBinds[button]; }
 
         static executeAction(action) {
             if (!action) return;
             Input.clear(); TouchInput.clear();
             switch (action.type) {
-                case 'commonEvent': 
-                    if (action.commonEventId > 0) { 
-                        action.isParallel ? $gameMap.requestParallelCommonEvent(action.commonEventId) : $gameTemp.reserveCommonEvent(action.commonEventId); 
-                    } 
-                    break;
-                case 'mapEvent': 
-                    const event = action.mapEventId > 0 ? $gameMap.event(action.mapEventId) : $gamePlayer; 
-                    if (event) event.start(); 
-                    break;
-                case 'scriptCall': 
-                    try { 
-                        const a=$gameActors, p=$gameParty, s=$gameSwitches, v=$gameVariables; 
-                        eval(action.scriptCall); 
-                    } catch (e) { 
-                        console.error(`${pluginName}: Script call error.`, e); 
-                    } 
-                    break;
+                case 'commonEvent': if (action.commonEventId > 0) { action.isParallel ? $gameMap.requestParallelCommonEvent(action.commonEventId) : $gameTemp.reserveCommonEvent(action.commonEventId); } break;
+                case 'mapEvent': const event = action.mapEventId > 0 ? $gameMap.event(action.mapEventId) : $gamePlayer; if (event) event.start(); break;
+                case 'scriptCall': try { const a=$gameActors, p=$gameParty, s=$gameSwitches, v=$gameVariables; eval(action.scriptCall); } catch (e) { console.error(`${pluginName}: Script call error.`, e); } break;
+                case 'toggleMoveForward': $gamePlayer.toggleAutoMoveForward(); break;
             }
         }
     }
@@ -343,16 +280,44 @@ var JDB_AdvancedInput = window.JDB_AdvancedInput || {};
     const _TouchInput_onMouseUp = TouchInput._onMouseUp;
     TouchInput._onMouseUp = function(event) { _TouchInput_onMouseUp.call(this, event); if (event.button === 1) this._middlePressed = false; };
     TouchInput.isMiddlePressed = function() { return this._middlePressed; };
-
-    Game_Map.prototype.requestParallelCommonEvent = function(commonEventId) {
-        const commonEvent = new Game_CommonEvent(commonEventId);
-        if (commonEvent.isParallel()) { this._commonEvents.push(commonEvent); }
-        else { const interp = new Game_Interpreter(); interp.setup(commonEvent.list()); (this._interpreters = this._interpreters || []).push(interp); }
-    };
+    Game_Map.prototype.requestParallelCommonEvent = function(commonEventId) { const commonEvent = new Game_CommonEvent(commonEventId); if (commonEvent.isParallel()) { this._commonEvents.push(commonEvent); } else { const interp = new Game_Interpreter(); interp.setup(commonEvent.list()); (this._interpreters = this._interpreters || []).push(interp); } };
     const _Game_Map_update = Game_Map.prototype.update;
-    Game_Map.prototype.update = function(sceneActive) {
-        _Game_Map_update.call(this, sceneActive);
-        if (this._interpreters) { for (let i = this._interpreters.length - 1; i >= 0; i--) { const interp = this._interpreters[i]; if (!interp.isRunning()) this._interpreters.splice(i, 1); else interp.update(); } }
+    Game_Map.prototype.update = function(sceneActive) { _Game_Map_update.call(this, sceneActive); if (this._interpreters) { for (let i = this._interpreters.length - 1; i >= 0; i--) { const interp = this._interpreters[i]; if (!interp.isRunning()) this._interpreters.splice(i, 1); else interp.update(); } } };
+
+    // --- Add state to Game_CharacterBase ---
+    const _Game_CharacterBase_initMembers = Game_CharacterBase.prototype.initMembers;
+    Game_CharacterBase.prototype.initMembers = function() {
+        _Game_CharacterBase_initMembers.call(this);
+        this._isAutoMovingForward = false;
+    };
+
+    // --- Add toggle function to Game_Player ---
+    Game_Player.prototype.toggleAutoMoveForward = function() {
+        if (!this._isAutoMovingForward && !this.canMove()) {
+            return; // Don't activate if player can't move (in menu, event, etc.)
+        }
+        this._isAutoMovingForward = !this._isAutoMovingForward;
+    };
+
+    // --- Core Movement Logic ---
+    const _Game_Player_update = Game_Player.prototype.update;
+    Game_Player.prototype.update = function(sceneActive) {
+        if (sceneActive && this._isAutoMovingForward && this.canMove()) {
+            // Check for any manual input that should override the auto-move.
+            // This includes arrow keys and map clicks.
+            if (this.getInputDirection() > 0 || $gameTemp.isDestinationValid()) {
+                this._isAutoMovingForward = false; // Cancel auto-move
+            }
+        }
+
+        // Call the original update function, which processes manual input.
+        _Game_Player_update.call(this, sceneActive);
+
+        // After manual input is processed, if we are still set to auto-move
+        // and not currently moving, execute our auto-move.
+        if (sceneActive && this._isAutoMovingForward && !this.isMoving() && this.canMove()) {
+            this.moveStraight(this.direction());
+        }
     };
 
     const _Scene_Map_updateMain = Scene_Map.prototype.updateMain;
@@ -363,27 +328,33 @@ var JDB_AdvancedInput = window.JDB_AdvancedInput || {};
     };
 
     Scene_Map.prototype.processJdbInput = function() {
-        for (const keyName in $jdbInputData.keyBinds) { const bind = $jdbInputData.keyBinds[keyName]; if (Input[bind.trigger](keyName)) { JDB_InputManager.executeAction(bind); return; } }
-        for (const button in $jdbInputData.mouseBinds) { const bind = $jdbInputData.mouseBinds[button]; let pressed = false;
-            switch(button) { case 'left': pressed = TouchInput[bind.trigger](); break; case 'right': pressed = (bind.trigger === 'isTriggered') ? TouchInput.isCancelled() : TouchInput.isRightPressed(); break; case 'middle': pressed = TouchInput.isMiddlePressed(); break; }
-            if (pressed) { JDB_InputManager.executeAction(bind); return; }
+        for (const keyName in $jdbInputData.keyBinds) {
+            const bind = $jdbInputData.keyBinds[keyName];
+            if (Input[bind.trigger](keyName)) {
+                JDB_InputManager.executeAction(bind);
+                return;
+            }
+        }
+        for (const button in $jdbInputData.mouseBinds) {
+            const bind = $jdbInputData.mouseBinds[button];
+            let pressed = false;
+            switch(button) {
+                case 'left': pressed = TouchInput[bind.trigger](); break;
+                case 'right': pressed = (bind.trigger === 'isTriggered') ? TouchInput.isCancelled() : TouchInput.isRightPressed(); break;
+                case 'middle': pressed = TouchInput.isMiddlePressed(); break;
+            }
+            if (pressed) {
+                JDB_InputManager.executeAction(bind);
+                return;
+            }
         }
     };
 
-    // --- Public API ---
-    const API = {
-        assignKey(keyName, actionObject, overwrite = true) { JDB_InputManager.assignKey(keyName, actionObject, overwrite); },
-        removeKey(keyName, restoreDefault = true) { JDB_InputManager.removeKey(keyName, restoreDefault); },
-        assignMouse(button, actionObject, overwrite = true) { JDB_InputManager.assignMouse(button, actionObject, overwrite); },
-        removeMouse(button) { JDB_InputManager.removeMouse(button); }
-    };
+    const API = { assignKey(keyName, actionObject, overwrite = true) { JDB_InputManager.assignKey(keyName, actionObject, overwrite); }, removeKey(keyName, restoreDefault = true) { JDB_InputManager.removeKey(keyName, restoreDefault); }, assignMouse(button, actionObject, overwrite = true) { JDB_InputManager.assignMouse(button, actionObject, overwrite); }, removeMouse(button) { JDB_InputManager.removeMouse(button); } };
     JDB_AdvancedInput.API = API;
-
-    // --- Plugin Commands Registration ---
     function register(command, func) { PluginManager.registerCommand(pluginName, command, func); }
     register("assignKey", args => { const action = parseActionFromJSON(args.action); if (action) API.assignKey(args.keyName, action, args.overwrite === 'true'); });
     register("removeKey", args => API.removeKey(args.keyName, args.restoreDefault === 'true'));
     register("assignMouse", args => { const action = parseActionFromJSON(args.action); if (action) API.assignMouse(args.mouseButton, action, args.overwrite === 'true'); });
     register("removeMouse", args => API.removeMouse(args.mouseButton));
-
 })();
